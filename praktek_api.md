@@ -1,10 +1,85 @@
 # Praktek: Membuat dan Mengkonsumsi API
 
-## 1. Membuat API di CodeIgniter 4
+## Pendahuluan
 
-### 1.1 Setup API Controller
+Setelah membuat CRUD untuk Device Types dan Devices di **praktek_crud.md**, sekarang kita akan:
+1. Membuat API untuk Device Types dan Devices
+2. Menggunakan API Device Types untuk dropdown di form Device (mengganti cara lama)
+3. Mengkonsumsi API publik Netbox untuk menampilkan list devices dari Netbox
 
-CodeIgniter 4 sudah punya ResourceController untuk membuat RESTful API dengan mudah.
+---
+
+## 1. Membuat API Lokal
+
+### 1.1 Buat API Controller untuk Device Types
+
+**File:** `app/Controllers/Api/DeviceTypeApiController.php`
+
+Buat folder `Api` di `app/Controllers/` jika belum ada, lalu buat file:
+
+```php
+<?php
+
+namespace App\Controllers\Api;
+
+use App\Controllers\BaseController;
+use App\Models\DeviceTypeModel;
+use CodeIgniter\API\ResponseTrait;
+
+class DeviceTypeApiController extends BaseController
+{
+    use ResponseTrait;
+
+    protected $model;
+
+    public function __construct()
+    {
+        $this->model = new DeviceTypeModel();
+    }
+
+    /**
+     * GET /api/device-types
+     * Ambil semua device types (untuk dropdown)
+     */
+    public function index()
+    {
+        $deviceTypes = $this->model->findAll();
+        
+        return $this->respond([
+            'status' => 'success',
+            'message' => 'Data berhasil diambil',
+            'data' => $deviceTypes
+        ], 200);
+    }
+
+    /**
+     * GET /api/device-types/{id}
+     * Ambil device type berdasarkan ID
+     */
+    public function show($id = null)
+    {
+        $deviceType = $this->model->find($id);
+        
+        if (!$deviceType) {
+            return $this->failNotFound('Device type tidak ditemukan');
+        }
+
+        return $this->respond([
+            'status' => 'success',
+            'message' => 'Data berhasil diambil',
+            'data' => $deviceType
+        ], 200);
+    }
+}
+```
+
+**Cara Buat:**
+```bash
+# Buat folder Api jika belum ada
+mkdir app/Controllers/Api
+
+# Buat file DeviceTypeApiController.php
+```
 
 ### 1.2 Buat API Controller untuk Devices
 
@@ -17,7 +92,6 @@ namespace App\Controllers\Api;
 
 use App\Controllers\BaseController;
 use App\Models\DeviceModel;
-use App\Models\DeviceTypeModel;
 use CodeIgniter\API\ResponseTrait;
 
 class DeviceApiController extends BaseController
@@ -33,7 +107,7 @@ class DeviceApiController extends BaseController
 
     /**
      * GET /api/devices
-     * Ambil semua devices
+     * Ambil semua devices dengan relasi device type
      */
     public function index()
     {
@@ -145,144 +219,7 @@ class DeviceApiController extends BaseController
 }
 ```
 
-**Cara Buat:**
-```bash
-# Buat folder Api jika belum ada
-mkdir app/Controllers/Api
-
-# Buat file DeviceApiController.php
-```
-
-### 1.3 Buat API Controller untuk Device Types
-
-**File:** `app/Controllers/Api/DeviceTypeApiController.php`
-
-```php
-<?php
-
-namespace App\Controllers\Api;
-
-use App\Controllers\BaseController;
-use App\Models\DeviceTypeModel;
-use CodeIgniter\API\ResponseTrait;
-
-class DeviceTypeApiController extends BaseController
-{
-    use ResponseTrait;
-
-    protected $model;
-
-    public function __construct()
-    {
-        $this->model = new DeviceTypeModel();
-    }
-
-    /**
-     * GET /api/device-types
-     */
-    public function index()
-    {
-        $deviceTypes = $this->model->findAll();
-        
-        return $this->respond([
-            'status' => 'success',
-            'message' => 'Data berhasil diambil',
-            'data' => $deviceTypes
-        ], 200);
-    }
-
-    /**
-     * GET /api/device-types/{id}
-     */
-    public function show($id = null)
-    {
-        $deviceType = $this->model->find($id);
-        
-        if (!$deviceType) {
-            return $this->failNotFound('Device type tidak ditemukan');
-        }
-
-        return $this->respond([
-            'status' => 'success',
-            'message' => 'Data berhasil diambil',
-            'data' => $deviceType
-        ], 200);
-    }
-
-    /**
-     * POST /api/device-types
-     */
-    public function create()
-    {
-        $data = [
-            'name' => $this->request->getJSON(true)['name'] ?? null,
-            'description' => $this->request->getJSON(true)['description'] ?? null,
-        ];
-
-        if (!$this->model->insert($data)) {
-            return $this->failValidationErrors($this->model->errors());
-        }
-
-        $deviceType = $this->model->find($this->model->getInsertID());
-
-        return $this->respondCreated([
-            'status' => 'success',
-            'message' => 'Device type berhasil ditambahkan',
-            'data' => $deviceType
-        ]);
-    }
-
-    /**
-     * PUT /api/device-types/{id}
-     */
-    public function update($id = null)
-    {
-        $deviceType = $this->model->find($id);
-        
-        if (!$deviceType) {
-            return $this->failNotFound('Device type tidak ditemukan');
-        }
-
-        $data = [
-            'name' => $this->request->getJSON(true)['name'] ?? $deviceType['name'],
-            'description' => $this->request->getJSON(true)['description'] ?? $deviceType['description'],
-        ];
-
-        if (!$this->model->update($id, $data)) {
-            return $this->failValidationErrors($this->model->errors());
-        }
-
-        $updatedDeviceType = $this->model->find($id);
-
-        return $this->respond([
-            'status' => 'success',
-            'message' => 'Device type berhasil diupdate',
-            'data' => $updatedDeviceType
-        ], 200);
-    }
-
-    /**
-     * DELETE /api/device-types/{id}
-     */
-    public function delete($id = null)
-    {
-        $deviceType = $this->model->find($id);
-        
-        if (!$deviceType) {
-            return $this->failNotFound('Device type tidak ditemukan');
-        }
-
-        $this->model->delete($id);
-
-        return $this->respondDeleted([
-            'status' => 'success',
-            'message' => 'Device type berhasil dihapus'
-        ]);
-    }
-}
-```
-
-### 1.4 Setup Routes untuk API
+### 1.3 Setup Routes untuk API
 
 **File:** `app/Config/Routes.php`
 
@@ -294,9 +231,6 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function($routes) 
     // Device Types API
     $routes->get('device-types', 'DeviceTypeApiController::index');
     $routes->get('device-types/(:num)', 'DeviceTypeApiController::show/$1');
-    $routes->post('device-types', 'DeviceTypeApiController::create');
-    $routes->put('device-types/(:num)', 'DeviceTypeApiController::update/$1');
-    $routes->delete('device-types/(:num)', 'DeviceTypeApiController::delete/$1');
     
     // Devices API
     $routes->get('devices', 'DeviceApiController::index');
@@ -307,19 +241,503 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function($routes) 
 });
 ```
 
-### 1.5 Test API dengan cURL
+### 1.4 Test API dengan Browser
 
-#### GET - Ambil Semua Devices
+Buka di browser untuk test GET:
+- http://localhost/device-management/public/api/device-types
+- http://localhost/device-management/public/api/devices
+
+---
+
+## 2. Menggunakan API Lokal di View
+
+### 2.1 Update Form Device untuk Menggunakan API Device Types
+
+**File:** `app/Views/devices/create.php`
+
+Update form create untuk load device types dari API:
+
+```php
+<?= $this->extend('layout') ?>
+
+<?= $this->section('content') ?>
+<div class="row">
+    <div class="col-md-8">
+        <h1 class="mb-4"><?= $title ?></h1>
+
+        <form action="<?= base_url('devices/create') ?>" method="post" id="deviceForm">
+            <?= csrf_field() ?>
+            
+            <div class="mb-3">
+                <label for="device_type_id" class="form-label">Device Type <span class="text-danger">*</span></label>
+                <select class="form-select" id="device_type_id" name="device_type_id" required>
+                    <option value="">Loading...</option>
+                </select>
+                <div id="device-type-error" class="text-danger d-none"></div>
+            </div>
+
+            <div class="mb-3">
+                <label for="name" class="form-label">Nama Device <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="name" name="name" 
+                       value="<?= old('name') ?>" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="specification" class="form-label">Spesifikasi</label>
+                <textarea class="form-control" id="specification" name="specification" rows="3"><?= old('specification') ?></textarea>
+            </div>
+
+            <div class="mb-3">
+                <label for="status" class="form-label">Status <span class="text-danger">*</span></label>
+                <select class="form-select" id="status" name="status" required>
+                    <option value="active" <?= old('status') == 'active' ? 'selected' : '' ?>>Active</option>
+                    <option value="inactive" <?= old('status') == 'inactive' ? 'selected' : '' ?>>Inactive</option>
+                    <option value="maintenance" <?= old('status') == 'maintenance' ? 'selected' : '' ?>>Maintenance</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Simpan</button>
+            <a href="<?= base_url('devices') ?>" class="btn btn-secondary">Batal</a>
+        </form>
+    </div>
+</div>
+
+<?= $this->section('scripts') ?>
+<script>
+let isLoadingDeviceTypes = false;
+let lastFetchTime = 0;
+const FETCH_DEBOUNCE = 300; // Debounce 300ms
+
+// Load device types dari API saat halaman load
+document.addEventListener('DOMContentLoaded', function() {
+    const select = document.getElementById('device_type_id');
+    
+    // Load saat halaman pertama kali dimuat
+    loadDeviceTypes();
+    
+    // Load setiap kali user akan membuka dropdown
+    // Gunakan focus karena lebih reliable untuk dropdown
+    select.addEventListener('focus', function() {
+        const now = Date.now();
+        // Debounce untuk menghindari multiple calls
+        if (now - lastFetchTime > FETCH_DEBOUNCE) {
+            loadDeviceTypes();
+            lastFetchTime = now;
+        }
+    });
+    
+    // Juga load saat click (untuk memastikan)
+    select.addEventListener('click', function() {
+        const now = Date.now();
+        if (now - lastFetchTime > FETCH_DEBOUNCE) {
+            loadDeviceTypes();
+            lastFetchTime = now;
+        }
+    });
+});
+
+async function loadDeviceTypes() {
+    // Prevent multiple simultaneous calls
+    if (isLoadingDeviceTypes) {
+        return;
+    }
+    
+    isLoadingDeviceTypes = true;
+    const select = document.getElementById('device_type_id');
+    const errorDiv = document.getElementById('device-type-error');
+    
+    // Simpan nilai yang sedang dipilih sebelum reload
+    const currentValue = select.value;
+    
+    // Tampilkan loading indicator tanpa disable select (biarkan dropdown bisa dibuka)
+    const wasEmpty = select.options.length === 0 || (select.options.length === 1 && select.options[0].value === '');
+    
+    try {
+        const response = await fetch('<?= base_url('api/device-types') ?>');
+        const result = await response.json();
+        
+        console.log('API Response:', result); // Debug log
+        
+        if (result.status === 'success' && result.data) {
+            // Clear dan rebuild options
+            select.innerHTML = '<option value="">Pilih Device Type</option>';
+            
+            // Pastikan data adalah array
+            const deviceTypes = Array.isArray(result.data) ? result.data : [];
+            
+            if (deviceTypes.length === 0) {
+                select.innerHTML = '<option value="">Tidak ada data</option>';
+            } else {
+                deviceTypes.forEach(deviceType => {
+                    const option = document.createElement('option');
+                    option.value = deviceType.id;
+                    option.textContent = deviceType.name;
+                    
+                    // Set selected berdasarkan old value atau nilai yang sedang dipilih
+                    const oldValue = <?= old('device_type_id') ? old('device_type_id') : 'null' ?>;
+                    const valueToSelect = oldValue !== null ? oldValue : currentValue;
+                    
+                    if (deviceType.id == valueToSelect) {
+                        option.selected = true;
+                    }
+                    
+                    select.appendChild(option);
+                });
+            }
+            
+            errorDiv.classList.add('d-none');
+            console.log('Options loaded:', select.options.length); // Debug log
+        } else {
+            throw new Error(result.message || 'Gagal mengambil data');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        select.innerHTML = '<option value="">Error loading device types</option>';
+        errorDiv.textContent = 'Gagal memuat device types: ' + error.message;
+        errorDiv.classList.remove('d-none');
+    } finally {
+        isLoadingDeviceTypes = false;
+    }
+}
+</script>
+<?= $this->endSection() ?>
+<?= $this->endSection() ?>
+```
+
+### 2.2 Update Form Edit Device
+
+**File:** `app/Views/devices/edit.php`
+
+Update form edit dengan cara yang sama:
+
+```php
+<?= $this->extend('layout') ?>
+
+<?= $this->section('content') ?>
+<div class="row">
+    <div class="col-md-8">
+        <h1 class="mb-4"><?= $title ?></h1>
+
+        <form action="<?= base_url('devices/' . $device['id'] . '/update') ?>" method="post" id="deviceForm">
+            <?= csrf_field() ?>
+            
+            <div class="mb-3">
+                <label for="device_type_id" class="form-label">Device Type <span class="text-danger">*</span></label>
+                <select class="form-select" id="device_type_id" name="device_type_id" required>
+                    <option value="">Loading...</option>
+                </select>
+                <div id="device-type-error" class="text-danger d-none"></div>
+            </div>
+
+            <div class="mb-3">
+                <label for="name" class="form-label">Nama Device <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="name" name="name" 
+                       value="<?= old('name', $device['name']) ?>" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="specification" class="form-label">Spesifikasi</label>
+                <textarea class="form-control" id="specification" name="specification" rows="3"><?= old('specification', $device['specification']) ?></textarea>
+            </div>
+
+            <div class="mb-3">
+                <label for="status" class="form-label">Status <span class="text-danger">*</span></label>
+                <select class="form-select" id="status" name="status" required>
+                    <option value="active" <?= old('status', $device['status']) == 'active' ? 'selected' : '' ?>>Active</option>
+                    <option value="inactive" <?= old('status', $device['status']) == 'inactive' ? 'selected' : '' ?>>Inactive</option>
+                    <option value="maintenance" <?= old('status', $device['status']) == 'maintenance' ? 'selected' : '' ?>>Maintenance</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Update</button>
+            <a href="<?= base_url('devices') ?>" class="btn btn-secondary">Batal</a>
+        </form>
+    </div>
+</div>
+
+<?= $this->section('scripts') ?>
+<script>
+// Load device types dari API saat halaman load
+document.addEventListener('DOMContentLoaded', function() {
+    loadDeviceTypes();
+});
+
+async function loadDeviceTypes() {
+    const select = document.getElementById('device_type_id');
+    const errorDiv = document.getElementById('device-type-error');
+    const currentDeviceTypeId = <?= $device['device_type_id'] ?>;
+    
+    try {
+        const response = await fetch('<?= base_url('api/device-types') ?>');
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            select.innerHTML = '<option value="">Pilih Device Type</option>';
+            
+            result.data.forEach(deviceType => {
+                const option = document.createElement('option');
+                option.value = deviceType.id;
+                option.textContent = deviceType.name;
+                
+                // Set selected berdasarkan device yang sedang di-edit
+                if (deviceType.id == currentDeviceTypeId) {
+                    option.selected = true;
+                }
+                
+                select.appendChild(option);
+            });
+            
+            errorDiv.classList.add('d-none');
+        } else {
+            throw new Error('Gagal mengambil data');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        select.innerHTML = '<option value="">Error loading device types</option>';
+        errorDiv.textContent = 'Gagal memuat device types. Silakan refresh halaman.';
+        errorDiv.classList.remove('d-none');
+    }
+}
+</script>
+<?= $this->endSection() ?>
+<?= $this->endSection() ?>
+```
+
+**Keuntungan menggunakan API:**
+- Device types selalu up-to-date tanpa perlu refresh halaman
+- Bisa digunakan untuk autocomplete atau search
+- Lebih dinamis dan interaktif
+
+---
+
+## 3. Mengkonsumsi API Publik: Netbox Device List
+
+### 3.1 Buat Controller untuk Netbox API
+
+**File:** `app/Controllers/NetboxController.php`
+
+```php
+<?php
+
+namespace App\Controllers;
+
+use App\Controllers\BaseController;
+
+class NetboxController extends BaseController
+{
+    /**
+     * Menampilkan list devices dari Netbox
+     * GET /netbox/devices
+     */
+    public function index()
+    {
+        // API Key akan di-set di .env atau config
+        $netboxUrl = getenv('NETBOX_URL') ?: 'http://localhost:8000';
+        $apiKey = getenv('NETBOX_API_KEY') ?: '';
+        
+        if (empty($apiKey)) {
+            return redirect()->back()
+                ->with('error', 'Netbox API Key belum dikonfigurasi. Silakan set NETBOX_API_KEY di .env');
+        }
+        
+        $client = \Config\Services::curlrequest();
+        
+        try {
+            $response = $client->get($netboxUrl . '/api/dcim/devices/', [
+                'headers' => [
+                    'Authorization' => 'Token ' . $apiKey,
+                    'Accept' => 'application/json',
+                ],
+                'http_errors' => false,
+            ]);
+            
+            $statusCode = $response->getStatusCode();
+            
+            if ($statusCode !== 200) {
+                throw new \Exception('Netbox API error: ' . $statusCode);
+            }
+            
+            $result = json_decode($response->getBody(), true);
+            $devices = $result['results'] ?? [];
+            
+            $data = [
+                'title' => 'Netbox Devices',
+                'devices' => $devices,
+                'netboxUrl' => $netboxUrl,
+            ];
+            
+            return view('netbox/devices', $data);
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->with('error', 'Gagal mengambil data dari Netbox: ' . $e->getMessage());
+        }
+    }
+}
+```
+
+### 3.2 Setup Environment Variable
+
+**File:** `env` (atau `.env`)
+
+Tambahkan konfigurasi Netbox:
+
+```env
+# Netbox Configuration
+NETBOX_URL=http://localhost:8000
+NETBOX_API_KEY=your_api_key_here
+```
+
+**Catatan:** Ganti `your_api_key_here` dengan API key Netbox Anda.
+
+### 3.3 Buat View untuk Netbox Devices
+
+**File:** `app/Views/netbox/devices.php`
+
+Buat folder `netbox` di `app/Views/` jika belum ada:
+
+```php
+<?= $this->extend('layout') ?>
+
+<?= $this->section('content') ?>
+<div class="row">
+    <div class="col-md-12">
+        <h1 class="mb-4"><?= $title ?></h1>
+        <p class="text-muted">Data diambil dari Netbox API: <?= esc($netboxUrl) ?></p>
+
+        <?php if (empty($devices)): ?>
+            <div class="alert alert-info">
+                Tidak ada device ditemukan di Netbox.
+            </div>
+        <?php else: ?>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Device Type</th>
+                            <th>Status</th>
+                            <th>Site</th>
+                            <th>Rack</th>
+                            <th>Position</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($devices as $device): ?>
+                            <tr>
+                                <td><?= $device['id'] ?? '-' ?></td>
+                                <td>
+                                    <strong><?= esc($device['name'] ?? $device['display'] ?? '-') ?></strong>
+                                </td>
+                                <td>
+                                    <?php if (isset($device['device_type'])): ?>
+                                        <?= esc($device['device_type']['model'] ?? '-') ?>
+                                    <?php else: ?>
+                                        -
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php
+                                    $status = $device['status']['value'] ?? 'unknown';
+                                    $badgeClass = [
+                                        'active' => 'bg-success',
+                                        'planned' => 'bg-info',
+                                        'staged' => 'bg-warning',
+                                        'failed' => 'bg-danger',
+                                        'inventory' => 'bg-secondary',
+                                        'decommissioning' => 'bg-dark',
+                                    ];
+                                    $badge = $badgeClass[$status] ?? 'bg-secondary';
+                                    ?>
+                                    <span class="badge <?= $badge ?>"><?= ucfirst($status) ?></span>
+                                </td>
+                                <td>
+                                    <?php if (isset($device['site'])): ?>
+                                        <?= esc($device['site']['name'] ?? '-') ?>
+                                    <?php else: ?>
+                                        -
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if (isset($device['rack'])): ?>
+                                        <?= esc($device['rack']['name'] ?? '-') ?>
+                                    <?php else: ?>
+                                        -
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if (isset($device['position'])): ?>
+                                        <?= $device['position'] ?>
+                                    <?php else: ?>
+                                        -
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+<?= $this->endSection() ?>
+```
+
+### 3.4 Tambahkan Routes untuk Netbox
+
+**File:** `app/Config/Routes.php`
+
+Tambahkan di dalam function `setRoutes()`:
+
+```php
+// Netbox Routes
+$routes->group('netbox', function($routes) {
+    $routes->get('devices', 'NetboxController::index');
+});
+```
+
+### 3.5 Tambahkan Link di Navbar (Opsional)
+
+**File:** `app/Views/layout.php`
+
+Tambahkan link Netbox di navbar:
+
+```php
+<li class="nav-item">
+    <a class="nav-link" href="<?= base_url('netbox/devices') ?>">Netbox Devices</a>
+</li>
+```
+
+### 3.6 Cara Mendapatkan Netbox API Key
+
+1. Login ke Netbox
+2. Buka **User Menu** → **API Tokens**
+3. Klik **Add a token**
+4. Copy token yang di-generate
+5. Paste ke file `.env` sebagai `NETBOX_API_KEY`
+
+---
+
+## 4. Testing API
+
+### 4.1 Test API Lokal dengan Browser
+
+- **Device Types:** http://localhost/device-management/public/api/device-types
+- **Devices:** http://localhost/device-management/public/api/devices
+
+### 4.2 Test API Lokal dengan cURL
+
+#### GET Device Types
+```bash
+curl -X GET http://localhost/device-management/public/api/device-types
+```
+
+#### GET Devices
 ```bash
 curl -X GET http://localhost/device-management/public/api/devices
 ```
 
-#### GET - Ambil Device Berdasarkan ID
-```bash
-curl -X GET http://localhost/device-management/public/api/devices/1
-```
-
-#### POST - Buat Device Baru
+#### POST Device Baru
 ```bash
 curl -X POST http://localhost/device-management/public/api/devices \
   -H "Content-Type: application/json" \
@@ -331,354 +749,18 @@ curl -X POST http://localhost/device-management/public/api/devices \
   }'
 ```
 
-#### PUT - Update Device
-```bash
-curl -X PUT http://localhost/device-management/public/api/devices/1 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Server Production 1 Updated",
-    "status": "maintenance"
-  }'
-```
+### 4.3 Test Netbox API
 
-#### DELETE - Hapus Device
-```bash
-curl -X DELETE http://localhost/device-management/public/api/devices/1
-```
-
-### 1.6 Test API dengan Postman
-
-1. **Install Postman** dari: https://www.postman.com/downloads/
-
-2. **Setup Request:**
-   - Method: GET, POST, PUT, DELETE
-   - URL: http://localhost/device-management/public/api/devices
-   - Headers: `Content-Type: application/json`
-   - Body (untuk POST/PUT): Raw → JSON
-
-3. **Contoh Body untuk POST:**
-```json
-{
-  "device_type_id": 1,
-  "name": "Server Production 1",
-  "specification": "Intel Xeon, 32GB RAM, 1TB SSD",
-  "status": "active"
-}
-```
+1. Pastikan Netbox sudah running dan accessible
+2. Set `NETBOX_API_KEY` di `.env`
+3. Buka: http://localhost/device-management/public/netbox/devices
 
 ---
 
-## 2. Mengkonsumsi API Lokal
+## 5. API Response Format
 
-### 2.1 Konsumsi API dari View (JavaScript Fetch)
+### Format Standar Response (Success)
 
-**File:** `app/Views/devices/index.php`
-
-Tambahkan script di bagian bawah sebelum `</body>`:
-
-```html
-<script>
-// Ambil semua devices dari API
-async function loadDevicesFromApi() {
-    try {
-        const response = await fetch('<?= base_url('api/devices') ?>');
-        const result = await response.json();
-        
-        if (result.status === 'success') {
-            console.log('Devices:', result.data);
-            // Update UI dengan data dari API
-            updateDevicesTable(result.data);
-        }
-    } catch (error) {
-        console.error('Error:', error);
-    }
-}
-
-// Update tabel dengan data dari API
-function updateDevicesTable(devices) {
-    const tbody = document.querySelector('table tbody');
-    tbody.innerHTML = '';
-    
-    if (devices.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center">Tidak ada data</td></tr>';
-        return;
-    }
-    
-    devices.forEach(device => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${device.id}</td>
-            <td>${device.device_type_name}</td>
-            <td>${device.name}</td>
-            <td>${device.specification || '-'}</td>
-            <td><span class="badge bg-success">${device.status}</span></td>
-            <td>
-                <a href="<?= base_url('devices/') ?>${device.id}" class="btn btn-sm btn-info">Detail</a>
-                <a href="<?= base_url('devices/') ?>${device.id}/edit" class="btn btn-sm btn-warning">Edit</a>
-                <a href="<?= base_url('devices/') ?>${device.id}/delete" class="btn btn-sm btn-danger">Hapus</a>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-}
-
-// Panggil saat halaman load
-// loadDevicesFromApi();
-</script>
-```
-
-### 2.2 Konsumsi API dari Controller (cURL)
-
-**File:** `app/Controllers/DeviceController.php`
-
-Tambahkan method untuk konsumsi API:
-
-```php
-/**
- * Contoh konsumsi API lokal dari controller
- */
-public function apiExample()
-{
-    // Konsumsi API lokal
-    $client = \Config\Services::curlrequest();
-    
-    try {
-        $response = $client->get(base_url('api/devices'));
-        $result = json_decode($response->getBody(), true);
-        
-        $data = [
-            'title' => 'Devices dari API',
-            'devices' => $result['data'] ?? [],
-        ];
-        
-        return view('devices/api_example', $data);
-    } catch (\Exception $e) {
-        return redirect()->back()
-            ->with('error', 'Gagal mengambil data dari API: ' . $e->getMessage());
-    }
-}
-```
-
----
-
-## 3. Mengkonsumsi API Publik
-
-### 3.1 Contoh: REST Countries API
-
-**API Endpoint:** https://restcountries.com/v3.1/all
-
-### 3.2 Buat Controller untuk Konsumsi API Publik
-
-**File:** `app/Controllers/Api/PublicApiController.php`
-
-```php
-<?php
-
-namespace App\Controllers\Api;
-
-use App\Controllers\BaseController;
-use CodeIgniter\API\ResponseTrait;
-
-class PublicApiController extends BaseController
-{
-    use ResponseTrait;
-
-    /**
-     * Konsumsi REST Countries API
-     * GET /api/public/countries
-     */
-    public function getCountries()
-    {
-        $client = \Config\Services::curlrequest();
-        
-        try {
-            $response = $client->get('https://restcountries.com/v3.1/all');
-            $countries = json_decode($response->getBody(), true);
-            
-            // Ambil hanya data yang diperlukan
-            $data = array_map(function($country) {
-                return [
-                    'name' => $country['name']['common'] ?? '',
-                    'capital' => $country['capital'][0] ?? '',
-                    'region' => $country['region'] ?? '',
-                    'population' => $country['population'] ?? 0,
-                    'flag' => $country['flags']['png'] ?? '',
-                ];
-            }, $countries);
-            
-            return $this->respond([
-                'status' => 'success',
-                'message' => 'Data berhasil diambil dari REST Countries API',
-                'data' => $data
-            ], 200);
-        } catch (\Exception $e) {
-            return $this->fail('Gagal mengambil data: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Konsumsi API dan tampilkan di view
-     * GET /api/public/countries-view
-     */
-    public function getCountriesView()
-    {
-        $client = \Config\Services::curlrequest();
-        
-        try {
-            $response = $client->get('https://restcountries.com/v3.1/all?fields=name,capital,region,population,flags');
-            $countries = json_decode($response->getBody(), true);
-            
-            $data = [
-                'title' => 'Daftar Negara (dari API Publik)',
-                'countries' => array_slice($countries, 0, 20), // Ambil 20 pertama saja
-            ];
-            
-            return view('api/countries', $data);
-        } catch (\Exception $e) {
-            return redirect()->back()
-                ->with('error', 'Gagal mengambil data: ' . $e->getMessage());
-        }
-    }
-}
-```
-
-### 3.3 Tambahkan Routes
-
-**File:** `app/Config/Routes.php`
-
-```php
-// Public API Routes
-$routes->group('api/public', ['namespace' => 'App\Controllers\Api'], function($routes) {
-    $routes->get('countries', 'PublicApiController::getCountries');
-    $routes->get('countries-view', 'PublicApiController::getCountriesView');
-});
-```
-
-### 3.4 Buat View untuk Menampilkan Data dari API Publik
-
-**File:** `app/Views/api/countries.php`
-
-```php
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $title ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body>
-    <div class="container mt-5">
-        <div class="row">
-            <div class="col-md-12">
-                <h1 class="mb-4"><?= $title ?></h1>
-                <p class="text-muted">Data diambil dari REST Countries API</p>
-
-                <div class="row">
-                    <?php foreach ($countries as $country): ?>
-                        <div class="col-md-4 mb-4">
-                            <div class="card">
-                                <img src="<?= esc($country['flags']['png']) ?>" class="card-img-top" alt="Flag" style="height: 150px; object-fit: cover;">
-                                <div class="card-body">
-                                    <h5 class="card-title"><?= esc($country['name']['common']) ?></h5>
-                                    <p class="card-text">
-                                        <strong>Ibu Kota:</strong> <?= esc($country['capital'][0] ?? '-') ?><br>
-                                        <strong>Region:</strong> <?= esc($country['region']) ?><br>
-                                        <strong>Populasi:</strong> <?= number_format($country['population']) ?>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-        </div>
-    </div>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
-```
-
-### 3.5 Konsumsi API Publik dengan JavaScript Fetch
-
-**File:** `app/Views/api/countries_js.php`
-
-```php
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Countries API - JavaScript</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body>
-    <div class="container mt-5">
-        <div class="row">
-            <div class="col-md-12">
-                <h1 class="mb-4">Daftar Negara (JavaScript Fetch)</h1>
-                <button onclick="loadCountries()" class="btn btn-primary mb-3">Load Countries</button>
-                
-                <div id="loading" class="d-none">Loading...</div>
-                <div id="countries-container" class="row"></div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        async function loadCountries() {
-            const container = document.getElementById('countries-container');
-            const loading = document.getElementById('loading');
-            
-            container.innerHTML = '';
-            loading.classList.remove('d-none');
-            
-            try {
-                // Konsumsi API publik langsung dari browser
-                const response = await fetch('https://restcountries.com/v3.1/all?fields=name,capital,region,population,flags');
-                const countries = await response.json();
-                
-                // Ambil 20 pertama
-                const limitedCountries = countries.slice(0, 20);
-                
-                limitedCountries.forEach(country => {
-                    const card = document.createElement('div');
-                    card.className = 'col-md-4 mb-4';
-                    card.innerHTML = `
-                        <div class="card">
-                            <img src="${country.flags.png}" class="card-img-top" alt="Flag" style="height: 150px; object-fit: cover;">
-                            <div class="card-body">
-                                <h5 class="card-title">${country.name.common}</h5>
-                                <p class="card-text">
-                                    <strong>Ibu Kota:</strong> ${country.capital?.[0] || '-'}<br>
-                                    <strong>Region:</strong> ${country.region}<br>
-                                    <strong>Populasi:</strong> ${country.population.toLocaleString()}
-                                </p>
-                            </div>
-                        </div>
-                    `;
-                    container.appendChild(card);
-                });
-            } catch (error) {
-                console.error('Error:', error);
-                container.innerHTML = '<div class="alert alert-danger">Gagal mengambil data</div>';
-            } finally {
-                loading.classList.add('d-none');
-            }
-        }
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
-```
-
----
-
-## 4. API Response Format
-
-### Format Standar Response
-
-**Success Response:**
 ```json
 {
   "status": "success",
@@ -687,7 +769,8 @@ $routes->group('api/public', ['namespace' => 'App\Controllers\Api'], function($r
 }
 ```
 
-**Error Response:**
+### Format Error Response
+
 ```json
 {
   "status": "error",
@@ -698,35 +781,19 @@ $routes->group('api/public', ['namespace' => 'App\Controllers\Api'], function($r
 
 ---
 
-## 5. Testing API
-
-### Test dengan Browser
-- GET: Buka langsung di browser
-  - http://localhost/device-management/public/api/devices
-  - http://localhost/device-management/public/api/device-types
-
-### Test dengan Postman
-- Import collection atau buat request manual
-- Test semua endpoint: GET, POST, PUT, DELETE
-
-### Test dengan cURL
-- Gunakan command di bagian 1.5
-
----
-
-## 6. Best Practices API
+## 6. Best Practices
 
 1. **Gunakan ResponseTrait** untuk format response konsisten
 2. **Validasi Input** sebelum insert/update
-3. **Error Handling** yang baik
+3. **Error Handling** yang baik dengan try-catch
 4. **HTTP Status Code** yang tepat (200, 201, 400, 404, 500)
-5. **Documentation** API endpoint
-6. **Rate Limiting** untuk mencegah abuse (opsional)
-7. **Authentication** jika API perlu di-secure (opsional)
+5. **Environment Variables** untuk konfigurasi sensitif (API keys)
+6. **CORS** jika API akan diakses dari domain berbeda (opsional)
+7. **Rate Limiting** untuk mencegah abuse (opsional)
+8. **Authentication** jika API perlu di-secure (opsional)
 
 ---
 
 ## Selesai!
 
 Setelah API selesai, lanjut ke: **praktek_ai.md**
-
